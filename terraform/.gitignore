@@ -7,4 +7,4 @@ terraform.tfstate.*
 # Terraform lock file
 terraform.lock.hcl
 
-.terraform
+terraform/.terraform
