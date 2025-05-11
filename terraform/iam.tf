@@ -26,9 +26,13 @@ resource "aws_iam_role_policy" "ec2_s3_policy" {
         Effect = "Allow",
         Action = [
           "s3:PutObject",
-          "s3:PutObjectAcl"
+          "s3:PutObjectAcl",
+          "s3:ListBucket"
         ],
-        Resource = "${aws_s3_bucket.log_bucket.arn}/*"
+        Resource = [
+          "${aws_s3_bucket.log_bucket.arn}",
+          "${aws_s3_bucket.log_bucket.arn}/*"
+        ]
       }
     ]
   })

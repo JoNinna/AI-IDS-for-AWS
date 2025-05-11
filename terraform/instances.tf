@@ -18,6 +18,9 @@ resource "aws_instance" "suricata_server" {
               #!/bin/bash
               set -eux
 
+              # Run the whole script as root
+              sudo bash <<'EOF'
+
               # Dezactivare IPv6
               sudo sysctl -w net.ipv6.conf.all.disable_ipv6=1
               sudo sysctl -w net.ipv6.conf.default.disable_ipv6=1
@@ -26,14 +29,20 @@ resource "aws_instance" "suricata_server" {
               sudo apt-get update -y
               sudo DEBIAN_FRONTEND=noninteractive apt-get install -y suricata awscli cron
               iface=$(ip -o -4 route show to default | awk '{print $5}')
-              sudo sudo sed -i "s/interface: .*/interface: $${iface}/" /etc/suricata/suricata.yaml
+              sudo sed -i "s/interface: .*/interface: $${iface}/" /etc/suricata/suricata.yaml
 
               # Activare și pornire Suricata
               sudo systemctl enable suricata
               sudo systemctl start suricata
 
+              mkdir -p /var/log/suricata
+              chown suricata:suricata /var/log/suricata
+
+              # Modify cron.d permissions for writing
+              sudo chmod 0755 /etc/cron.d
+
               # Configurare cron job pentru upload loguri
-              echo "*/5 * * * * root /usr/bin/aws s3 sync /var/log/suricata s3://${aws_s3_bucket.log_bucket.bucket}/suricata/\$(hostname)/" > /etc/cron.d/suricata-upload
+              echo "*/5 * * * * root /usr/bin/aws s3 sync /var/log/suricata s3://hids-logs/suricata/$(hostname)/" | sudo tee /etc/cron.d/suricata-upload > /dev/null
               chmod 0644 /etc/cron.d/suricata-upload
               systemctl restart cron
               EOF
