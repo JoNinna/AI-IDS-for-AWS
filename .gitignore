@@ -1,0 +1,16 @@
+# Ignore the .terraform directory (provider plugins, etc.)
+/terraform/.terraform/*
+.terraform/
+
+# Ignore Terraform state files
+*.tfstate
+*.tfstate.*
+terraform.tfstate
+terraform.tfstate.*
+terraform.tfstate.backup
+
+# Ignore Terraform lock file
+terraform.lock.hcl
+.terraform.lock.hcl
+
+*.tfvars
