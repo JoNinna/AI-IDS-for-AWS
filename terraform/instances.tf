@@ -66,43 +66,54 @@ resource "aws_instance" "falco_server" {
   iam_instance_profile = aws_iam_instance_profile.ec2_s3_profile.name
   associate_public_ip_address = true
 
-    user_data = <<-EOF
-              #!/bin/bash
-              set -e
+  user_data = <<-EOF
+    #!/bin/bash
+    set -eux
 
-              # Dezactivează IPv6
-              sysctl -w net.ipv6.conf.all.disable_ipv6=1
-              sysctl -w net.ipv6.conf.default.disable_ipv6=1
-              sysctl -w net.ipv6.conf.lo.disable_ipv6=1
-              echo "net.ipv6.conf.all.disable_ipv6 = 1" >> /etc/sysctl.conf
-              echo "net.ipv6.conf.default.disable_ipv6 = 1" >> /etc/sysctl.conf
-              echo "net.ipv6.conf.lo.disable_ipv6 = 1" >> /etc/sysctl.conf
-              sysctl -p
+    # Run the whole script as root
+    sudo bash <<'EOF'
 
-              # Actualizează pachetele și instalează dependențele necesare
-              sudo apt-get update
-              sudo apt-get install -y curl awscli cron
-              sudo apt-get install -y gnupg curl lsb-release apt-transport-https ca-certificates
+    # Disable IPv6
+    sysctl -w net.ipv6.conf.all.disable_ipv6=1
+    sysctl -w net.ipv6.conf.default.disable_ipv6=1
 
-              # Add Falco GPG key
-              curl -fsSL https://falco.org/repo/falcosecurity-packages.asc | gpg --dearmor -o /usr/share/keyrings/falco-archive-keyring.gpg
+    # Update and install packages
+    apt-get update -y
+    apt-get install -y docker.io awscli cron
 
-              # Add Falco repository
-              echo "deb [signed-by=/usr/share/keyrings/falco-archive-keyring.gpg] https://download.falco.org/packages/deb stable main" | tee /etc/apt/sources.list.d/falco.list
+    # Start and enable Docker
+    systemctl start docker
+    systemctl enable docker
 
-              # Install Falco
-              apt-get update
-              sudo apt-get install -y falco
+    # Create logs directory for Falco
+    mkdir -p /opt/falco/logs
+    chmod 777 /opt/falco/logs
 
-              # Pornește Falco și configurează-l să pornească automat la boot
-              sudo systemctl enable falco
-              sudo systemctl start falco
+    # Pull the Falco image if it doesn't exist locally
+    docker pull falcosecurity/falco:latest
 
-              # Creează cron job pentru upload loguri pe S3
-              echo "*/5 * * * * root aws s3 sync /var/log/falco s3://${aws_s3_bucket.log_bucket.bucket}/falco/\$(hostname)/" > /etc/cron.d/falco-upload
-              chmod 0644 /etc/cron.d/falco-upload
-              systemctl restart cron
-              EOF
+    # Run the Falco container
+    sudo docker run -d --name falco --privileged \
+      -v /var/run/docker.sock:/host/var/run/docker.sock \
+      -v /dev:/host/dev \
+      -v /proc:/host/proc:ro \
+      -v /boot:/host/boot:ro \
+      -v /lib/modules:/host/lib/modules:ro \
+      -v /usr:/host/usr:ro \
+      -v /etc:/host/etc:ro \
+      -v /opt/falco/logs:/var/log/falco \
+      falcosecurity/falco:latest \
+      sh -c "falco -o file_output.enabled=true -o file_output.filename=/var/log/falco/falco.log"
+
+    # Create cron job to upload Falco logs to S3 every minute
+    cat << 'CRON_EOF' > /etc/cron.d/falco-s3-upload
+    * * * * * root /usr/bin/aws s3 cp /opt/falco/logs/falco.log s3://hids-logs/falco-logs/falco-$(date +\%Y\%m\%d\%H\%M).log
+    CRON_EOF
+
+    chmod 0644 /etc/cron.d/falco-s3-upload
+    crontab /etc/cron.d/falco-s3-upload
+    service cron restart
+    EOF
 
   root_block_device {
     volume_size = 20
