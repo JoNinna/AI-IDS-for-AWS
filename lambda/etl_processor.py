@@ -8,6 +8,7 @@ def lambda_handler(event, context):
         bucket = record['s3']['bucket']['name']
         key    = record['s3']['object']['key']
 
+        # Only process .json files from correct prefixes
         if not key.endswith('.json') or not (key.startswith("suricata-logs/") or key.startswith("falco-logs/")):
             continue
 
@@ -15,11 +16,16 @@ def lambda_handler(event, context):
             response = s3.get_object(Bucket=bucket, Key=key)
             body = response['Body'].read().decode('utf-8')
 
-            # Handle both single-object and line-delimited logs
-            if body.strip().startswith('{'):
-                lines = [body.strip()]
-            else:
-                lines = body.splitlines()
+            # Try to parse as a single JSON object or list
+            try:
+                json_obj = json.loads(body)
+                if isinstance(json_obj, list):
+                    lines = [json.dumps(entry) for entry in json_obj]
+                else:
+                    lines = [json.dumps(json_obj)]
+            except json.JSONDecodeError:
+                # Fallback to line-delimited parsing
+                lines = body.strip().splitlines()
 
         except Exception as e:
             print(f"Error reading S3 object {key}: {e}")
@@ -44,6 +50,7 @@ def lambda_handler(event, context):
                         "status": data.get("http", {}).get("status"),
                         "user_agent": data.get("http", {}).get("http_user_agent")
                     })
+
             elif key.startswith("falco-logs/"):
                 if "output_fields" in data:
                     processed.append({
