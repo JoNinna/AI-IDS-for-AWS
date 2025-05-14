@@ -44,3 +44,45 @@ resource "aws_iam_instance_profile" "ec2_s3_profile" {
   name = "ec2-s3-profile"
   role = aws_iam_role.ec2_s3_write_role.name
 }
+
+# Lambda execution role (Allows Lambda to assume the role)
+resource "aws_iam_role" "lambda_role" {
+  name = "lambda-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Action = "sts:AssumeRole",
+      Effect = "Allow",
+      Principal = {
+        Service = "lambda.amazonaws.com"
+      }
+    }]
+  })
+}
+
+# Attaching the basic Lambda execution policy for logs
+resource "aws_iam_policy_attachment" "lambda_logs" {
+  name       = "attach-lambda-logs"
+  roles      = [aws_iam_role.lambda_role.name]
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+# S3 access policy for Lambda
+resource "aws_iam_role_policy" "s3_access" {
+  name = "lambda-s3-access"
+  role = aws_iam_role.lambda_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect = "Allow",
+      Action = [
+        "s3:GetObject",
+        "s3:PutObject"
+      ],
+      Resource = [
+        "${aws_s3_bucket.log_bucket.arn}/*"
+      ]
+    }]
+  })
+}

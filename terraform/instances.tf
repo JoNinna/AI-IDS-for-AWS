@@ -41,9 +41,13 @@ resource "aws_instance" "suricata_server" {
               # Modify cron.d permissions for writing
               sudo chmod 0755 /etc/cron.d
 
+              # Enable JSON logging in Suricata config
+              sudo sed -i 's|# - eve.json|- eve.json|' /etc/suricata/suricata.yaml  
+              sudo sed -i '/- eve.json:/,/^[^ ]/ s|#||' /etc/suricata/suricata.yaml
+
               # Configurare cron job pentru upload loguri
-              echo "*/5 * * * * root /usr/bin/aws s3 sync /var/log/suricata s3://hids-logs/suricata/$(hostname)/" | sudo tee /etc/cron.d/suricata-upload > /dev/null
-              chmod 0644 /etc/cron.d/suricata-upload
+              echo "*/5 * * * * root /usr/bin/aws s3 cp /var/log/suricata/eve.json s3://hids-logs/suricata-logs/suricata-$(date +\%Y\%m\%d\%H\%M).json" > /etc/cron.d/suricata-upload
+              chmod 0664 /etc/cron.d/suricata-upload
               systemctl restart cron
               EOF
 
@@ -103,14 +107,18 @@ resource "aws_instance" "falco_server" {
       -v /etc:/host/etc:ro \
       -v /opt/falco/logs:/var/log/falco \
       falcosecurity/falco:latest \
-      sh -c "falco -o file_output.enabled=true -o file_output.filename=/var/log/falco/falco.log"
+      falco \
+        -o json_output=true \
+        -o json_include_output_property=true \
+        -o file_output.enabled=true \
+        -o file_output.filename=/var/log/falco/falco.json
 
     # Create cron job to upload Falco logs to S3 every minute
     cat << 'CRON_EOF' > /etc/cron.d/falco-s3-upload
-    * * * * * root /usr/bin/aws s3 cp /opt/falco/logs/falco.log s3://hids-logs/falco-logs/falco-$(date +\%Y\%m\%d\%H\%M).log
+    * * * * * root /usr/bin/aws s3 cp /opt/falco/logs/falco.json s3://hids-logs/falco-logs/falco-$(date +\%Y\%m\%d\%H\%M).json
     CRON_EOF
 
-    chmod 0644 /etc/cron.d/falco-s3-upload
+    chmod 0664 /etc/cron.d/falco-s3-upload
     crontab /etc/cron.d/falco-s3-upload
     service cron restart
     EOF
