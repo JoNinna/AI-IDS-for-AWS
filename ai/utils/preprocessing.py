@@ -24,6 +24,15 @@ def load_json_logs(file_path):
         lines = [json.loads(line) for line in f if line.strip()]
     return pd.DataFrame(lines)
 
+def align_features(df: pd.DataFrame, required_features: list) -> pd.DataFrame:
+    # Adaugă coloanele lipsă cu 0
+    for col in required_features:
+        if col not in df.columns:
+            df[col] = 0
+    # Elimină coloanele nenecesare (păstrează ordinea)
+    df = df[required_features]
+    return df
+
 def preprocess_dataframe(df, label_field=None, required_features=None):
     """Preprocess the DataFrame: handle missing, encode, extract features."""
     df = df.copy()
