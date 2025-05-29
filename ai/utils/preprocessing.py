@@ -1,68 +1,68 @@
-import json
 import pandas as pd
-from sklearn.preprocessing import LabelEncoder
+import json
+import os
 
-def load_cicids_csv(path: str) -> pd.DataFrame:
-    df = pd.read_csv(path)
+def load_csv_data(file_path):
+    df = pd.read_csv(file_path)
+    df.columns = df.columns.str.strip()  # ← elimină spațiile din capete
     return df
 
-def preprocess_cicids(df: pd.DataFrame) -> tuple:
-    # Elimină coloane inutile dacă există
-    cols_to_drop = ['Flow ID', 'Source IP', 'Destination IP', 'Timestamp', 'Label'] if 'Label' in df.columns else []
-    X = df.drop(columns=[col for col in cols_to_drop if col in df.columns], errors='ignore')
+# PENTRU IMBUNATATIRI VIITOARE! 
+# def load_json_data(file_path):
+#     data = []
+#     with open(file_path) as f:
+#         for line in f:
+#             data.append(json.loads(line))
+#     return pd.DataFrame(data)
 
-    # Encodează labelul
-    y = None
-    if 'Label' in df.columns:
-        le = LabelEncoder()
-        y = le.fit_transform(df['Label'])
-    return X, y
+# def standardize_column_names(df):
+#     column_mapping = {
+#         'Source IP': 'src_ip',
+#         'Destination IP': 'dest_ip',
+#         'Timestamp': 'timestamp',
+#     }
+#     return df.rename(columns=lambda col: column_mapping.get(col, col))
 
-def load_json_logs(file_path):
-    """Load a JSON log file with one JSON object per line."""
-    with open(file_path, 'r') as f:
-        lines = [json.loads(line) for line in f if line.strip()]
-    return pd.DataFrame(lines)
+# def extract_features(df):
+#     df = df.copy()
+#     df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
 
-def align_features(df: pd.DataFrame, required_features: list) -> pd.DataFrame:
-    # Adaugă coloanele lipsă cu 0
-    for col in required_features:
-        if col not in df.columns:
-            df[col] = 0
-    # Elimină coloanele nenecesare (păstrează ordinea)
-    df = df[required_features]
-    return df
+#     # Feature: hour of day
+#     df['hour'] = df['timestamp'].dt.hour.fillna(0).astype(int)
 
-def preprocess_dataframe(df, label_field=None, required_features=None):
-    """Preprocess the DataFrame: handle missing, encode, extract features."""
-    df = df.copy()
+#     # Frequency of IP occurrences
+#     df['source_ip_count'] = df['source_ip'].map(df['source_ip'].value_counts())
+#     df['destination_ip_count'] = df['destination_ip'].map(df['destination_ip'].value_counts())
 
-    # Drop columns with too many NaNs or only 1 unique value
-    df = df.dropna(axis=1, thresh=0.5 * len(df))
-    df = df.loc[:, df.nunique() > 1]
+#     # Protocol one-hot
+#     if 'protocol' in df.columns:
+#         proto_dummies = pd.get_dummies(df['protocol'], prefix='proto')
+#         df = pd.concat([df, proto_dummies], axis=1)
 
-    # Encode categorical features
-    encoders = {}
-    for col in df.select_dtypes(include='object').columns:
-        if col == label_field:
-            continue
-        le = LabelEncoder()
-        try:
-            df[col] = le.fit_transform(df[col].astype(str))
-            encoders[col] = le
-        except:
-            df = df.drop(columns=[col])
+#     # Drop unused or high cardinality fields
+#     df.drop(columns=['source_ip', 'destination_ip', 'protocol', 'timestamp'], inplace=True, errors='ignore')
+    
+#     return df
 
-    # Encode label if present
-    label_encoder = None
-    classes_ = None
-    if label_field and label_field in df.columns:
-        label_encoder = LabelEncoder()
-        df[label_field] = label_encoder.fit_transform(df[label_field].astype(str))
-        classes_ = label_encoder.classes_
+# def preprocess_for_training(df, label_field='label', standardize_columns=False):
+#     # Curăță numele coloanelor de spații
+#     df.columns = df.columns.str.strip()
 
-    # Align features if provided
-    if required_features:
-        df = align_features(df, required_features)
+#     if 'Label' in df.columns:
+#         df.rename(columns={'Label': 'label'}, inplace=True)
+    
+#     if standardize_columns:
+#         df = standardize_column_names(df)
 
-    return df, encoders, label_encoder, classes_
+#     if label_field not in df.columns:
+#         raise ValueError(f"Missing label field: {label_field} Available columns: {df.columns.tolist()}")
+
+#     y = df[label_field]
+#     df = df.drop(columns=[label_field])
+
+#     X = extract_features(df)
+
+#     # Fill NA and normalize if needed
+#     X = X.fillna(0)
+
+#     return X, y
