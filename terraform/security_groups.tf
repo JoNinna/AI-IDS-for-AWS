@@ -32,6 +32,13 @@ resource "aws_security_group" "falco_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"] # sau IP-ul Kali doar pentru teste controlate
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
