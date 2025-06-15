@@ -1,11 +1,12 @@
 import pandas as pd
-import json
-import os
 
 def load_csv_data(file_path):
-    df = pd.read_csv(file_path)
-    df.columns = df.columns.str.strip()  # ← elimină spațiile din capete
+    df = pd.read_csv(file_path, encoding='latin1', low_memory=False) 
+    df.columns = df.columns.str.strip()
     return df
+
+import json
+import os
 
 # PENTRU IMBUNATATIRI VIITOARE! 
 # def load_json_data(file_path):
